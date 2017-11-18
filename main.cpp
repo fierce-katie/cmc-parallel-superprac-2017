@@ -40,12 +40,14 @@ double f_node(double t)
 
 double x_i(int i)
 {
+    if (i < 0 || i > N1) return -1;
     double f = f_node((double)i/N1);
     return A2*f + A1*(1 - f);
 }
 
 double y_j(int j)
 {
+    if (j < 0 || j > N2) return -1;
     double f = f_node((double)j/N2);
     return B2*f + B1*(1 - f);
 }
@@ -91,13 +93,49 @@ class Node
     double *xs;
     double *ys;
     double **p;
+    double **p_prev;
+    double **r;
+    double **g;
+
+    int step;
+
+    bool border_point(int i, int j)
+    {
+        return ((i >= 0) && (j >= 0) && (i <= N1) && (j <= N2) &&
+                (!i || !j || (i == N1) || (j == N2)));
+    }
+
+    double h1(int i) { return (xs[i+1-x1+1] - xs[i-x1+1]); }
+    double h2(int j) { return (ys[j+1-y1+1] - ys[j-y1+1]); }
+    double h1_(int i) { return 0.5*(h1(i) + h1(i-1)); }
+    double h2_(int j) { return 0.5*(h2(j) + h2(j-1)); }
+    double dot(int from_i, int to_i, int from_j, int to_j,
+               double **u, double **v)
+    {
+        double sum = 0;
+        for (int i = from_i; i <= to_i; i++)
+            for (int j = from_j; j <= to_j; j++)
+                sum += h1_(i)*h2_(j)*u[i-x1+1][j-y1+1]*v[i-x1+1][j-y1+1];
+        return sum;
+    }
+    double laplace(int i, int j, double **f)
+    {
+        double fij = f[i-x1+1][j-y1+1];
+        double fim1j = f[i-1-x1+1][j-y1+1];
+        double fip1j = f[i+1-x1+1][j-y1+1];
+        double fijm1 = f[i-x1+1][j-1-y1+1];
+        double fijp1 = f[i-x1+1][j+1-y1+1];
+        double f1 = (fij - fim1j)/h1(i-1) - (fip1j - fij)/h1(i);
+        double f2 = (fij - fijm1)/h2(j-1) - (fijp1 - fij)/h2(j);
+        return f1/h1_(i) + f2/h2_(j);
+    }
 
 public:
-    Node(int r, int rows, int cols)
+    Node(int rn, int rows, int cols)
     {
-        rank = r;
-        int j = r/cols;
-        int i = r - j*cols;
+        rank = rn;
+        int j = rn/cols;
+        int i = rn - j*cols;
         my_i = i;
         my_j = j;
 
@@ -110,31 +148,64 @@ public:
         up = (rank-cols >= 0) ? rank - cols : -1;
         down = (rank+cols < rows*cols) ? rank + cols : -1;
 
-        distribute_points(N1, i, cols, x1, x2);
-        distribute_points(N2, j, rows, y1, y2);
+        distribute_points(N1+1, i, cols, x1, x2);
+        distribute_points(N2+1, j, rows, y1, y2);
         nx = x2 - x1 + 1;
         ny = y2 - y1 + 1;
 
+        step = 0;
         xs = NULL;
         ys = NULL;
         p = NULL;
+        p_prev = NULL;
+        r = NULL;
+        g = NULL;
     }
 
     void Init()
     {
         int i, j;
-        xs = new double [nx];
-        ys = new double [ny];
-        for (i = x1; i <= x2; i++)
-            xs[i-x1] = x_i(i);
-        for (j = y1; j <= y2; j++)
-            ys[j-y1] = y_j(j);
+        // + 2 is for neighbours
+        xs = new double [nx+2];
+        ys = new double [ny+2];
+        for (i = x1-1; i <= x2+1; i++)
+            xs[i-x1+1] = x_i(i);
+        for (j = y1-1; j <= y2+1; j++)
+            ys[j-y1+1] = y_j(j);
 
-        p = new double*[nx];
-        for (i = 0; i < nx; i++) {
-            p[i] = new double[ny];
-            for (j = 0; j < ny; j++)
-                p[i][j] = phi(xs[i], ys[j]);
+        p_prev = new double*[nx+2];
+        for (i = x1-1; i <= x2+1; i++) {
+            p_prev[i-x1+1] = new double[ny+2];
+            for (j = y1-1; j <= y2+1; j++) {
+                if (border_point(i, j))
+                    p_prev[i-x1+1][j-y1+1] = phi(xs[i-x1+1], ys[j-y1+1]);
+                else
+                    p_prev[i-x1+1][j-y1+1] = 0;
+            }
+        }
+
+        p = new double*[nx+2];
+        for (i = x1-1; i <= x2+1; i++) {
+            p[i-x1+1] = new double[ny+2];
+            for (j = y1-1; j <= y2+1; j++) {
+                p[i-x1+1][j-y1+1] = 0;
+            }
+        }
+
+        r = new double*[nx+2];
+        for (i = x1-1; i <= x2+1; i++) {
+            r[i-x1+1] = new double[ny+2];
+            for (j = y1-1; j <= y2+1; j++) {
+                r[i-x1+1][j-y1+1] = 0;
+            }
+        }
+
+        g = new double*[nx+2];
+        for (i = x1-1; i <= x2+1; i++) {
+            g[i-x1+1] = new double[ny+2];
+            for (j = y1-1; j <= y2+1; j++) {
+                g[i-x1+1][j-y1+1] = 0;
+            }
         }
     }
 
@@ -153,6 +224,10 @@ public:
                 rank, right, rank, up, rank, down,
                 rank, x1, x2,
                 rank, y1, y2);
+        for (int i = x1 - 1; i <= x2 + 1; i++)
+            for (int j = y1 - 1; j <= y2 + 1; j++)
+                printf("%d %d %d %d %f\n", rank, i, j,
+                        border_point(i, j), p_prev[i-x1+1][j-y1+1]);
     }
 
     ~Node() {
@@ -160,10 +235,26 @@ public:
             delete [] xs;
         if (ys)
             delete [] ys;
+        int i;
         if (p) {
-            for (int i = 0; i < nx; i++)
+            for (i = 0; i < nx+2; i++)
                 delete [] p[i];
             delete [] p;
+        }
+        if (p_prev) {
+            for (i = 0; i < nx+2; i++)
+                delete [] p_prev[i];
+            delete [] p_prev;
+        }
+        if (r) {
+            for (i = 0; i < nx+2; i++)
+                delete [] r[i];
+            delete [] r;
+        }
+        if (g) {
+            for (i = 0; i < nx+2; i++)
+                delete [] g[i];
+            delete [] g;
         }
     }
 };
