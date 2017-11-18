@@ -84,10 +84,13 @@ class Node
     // Points distribution
     int x1;
     int x2;
+    int nx;
     int y1;
     int y2;
+    int ny;
     double *xs;
     double *ys;
+    double **p;
 
 public:
     Node(int r, int rows, int cols)
@@ -109,20 +112,30 @@ public:
 
         distribute_points(N1, i, cols, x1, x2);
         distribute_points(N2, j, rows, y1, y2);
+        nx = x2 - x1 + 1;
+        ny = y2 - y1 + 1;
 
         xs = NULL;
         ys = NULL;
+        p = NULL;
     }
 
     void Init()
     {
         int i, j;
-        xs = new double [x2 - x1 + 1];
-        ys = new double [y2 - y1 + 1];
+        xs = new double [nx];
+        ys = new double [ny];
         for (i = x1; i <= x2; i++)
             xs[i-x1] = x_i(i);
         for (j = y1; j <= y2; j++)
             ys[j-y1] = y_j(j);
+
+        p = new double*[nx];
+        for (i = 0; i < nx; i++) {
+            p[i] = new double[ny];
+            for (j = 0; j < ny; j++)
+                p[i][j] = phi(xs[i], ys[j]);
+        }
     }
 
     void Print()
@@ -147,6 +160,11 @@ public:
             delete [] xs;
         if (ys)
             delete [] ys;
+        if (p) {
+            for (int i = 0; i < nx; i++)
+                delete [] p[i];
+            delete [] p;
+        }
     }
 };
 
