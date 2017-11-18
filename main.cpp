@@ -71,9 +71,9 @@ class Node
     // Rank
     int rank;
     // Column
-    int i;
+    int my_i;
     // Row
-    int j;
+    int my_j;
 
     // Ranks of neighbours
     int left;
@@ -93,8 +93,10 @@ public:
     Node(int r, int rows, int cols)
     {
         rank = r;
-        j = r/cols;
-        i = r - j*cols;
+        int j = r/cols;
+        int i = r - j*cols;
+        my_i = i;
+        my_j = j;
 
         int left_i = (i-1 >= 0) ? i-1 : cols - 1;
         int right_i = (i+1)%cols;
@@ -107,14 +109,22 @@ public:
 
         distribute_points(N1, i, cols, x1, x2);
         distribute_points(N2, j, rows, y1, y2);
+
+        xs = NULL;
+        ys = NULL;
+    }
+
+    void Init()
+    {
+        int i, j;
         xs = new double [x2 - x1 + 1];
         ys = new double [y2 - y1 + 1];
-
-        for (int xi = x1; xi <= x2; xi++)
-            xs[xi-x1] = x_i(xi);
-        for (int yj = y1; yj <= y2; yj++)
-            ys[yj-y1] = y_j(yj);
+        for (i = x1; i <= x2; i++)
+            xs[i-x1] = x_i(i);
+        for (j = y1; j <= y2; j++)
+            ys[j-y1] = y_j(j);
     }
+
     void Print()
     {
         const char* format
@@ -126,10 +136,17 @@ public:
               "%d down %d\n"
               "%d x1 %d x2 %d\n"
               "%d y1 %d y2 %d\n";
-        printf(format, rank, i, rank, j, rank, left,
+        printf(format, rank, my_i, rank, my_j, rank, left,
                 rank, right, rank, up, rank, down,
                 rank, x1, x2,
                 rank, y1, y2);
+    }
+
+    ~Node() {
+        if (xs)
+            delete [] xs;
+        if (ys)
+            delete [] ys;
     }
 };
 
@@ -166,7 +183,7 @@ int main(int argc, char **argv)
         printf("ROWS %d COLS %d\n", rows, cols);
 
     Node me(rank, rows, cols);
-
+    me.Init();
     me.Print();
 
     MPI_Finalize();
