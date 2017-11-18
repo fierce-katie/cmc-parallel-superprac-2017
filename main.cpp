@@ -260,7 +260,54 @@ public:
                     p[ii][jj] = p_prev[ii][jj] - tau*r[ii][jj];
                 }
         } else {
+            int start_i, end_i, start_j, end_j;
+            start_i = x1 > 1 ? x1-1 : 1;
+            end_i = x2 < N1-1 ? x2+1 : N1-1;
+            start_j = y1 > 1 ? y1-1 : 1;
+            end_j = y2 < N2-1 ? y2+1 : N2-1;
+            for (i = start_i; i <= end_i; i++)
+                for (j = start_j; j <= end_j; j++)
+                    l[i-x1+1][j-y1+1] = -laplace(i, j, r);
+            double tmp1 =
+                dot(start_i, end_i, start_j, end_j, l, g);
+            for (i = start_i; i <= end_i; i++)
+                for (j = start_j; j <= end_j; j++)
+                    l[i-x1+1][j-y1+1] = -laplace(i, j, g);
+            double tmp2 =
+                dot(start_i, end_i, start_j, end_j, l, g);
+            double alpha = tmp1/tmp2;
+            for (i = x1; i <= x2; i++)
+                for (j = y1; j <= y2; j++)
+                    g[i-x1+1][j-y1+1] =
+                        r[i-x1+1][j-y1+1] - alpha*g[i-x1+1][j-y1+1];
+            for (i = start_i; i <= end_i; i++)
+                for (j = start_j; j <= end_j; j++) {
+                    r[i-x1+1][j-y1+1] =
+                        -laplace(i, j, p_prev) - F(xs[i-x1+1], ys[j-y1+1]);
+                    l[i-x1+1][j-y1+1] = -laplace(i, j, g);
+                }
+            double tau =
+                dot(start_i, end_i, start_j, end_j, r, g)/dot(start_i, end_i, start_j, end_j, l, g);
+            for (i = x1; i <= x2; i++)
+                for (j = y1; j <= y2; j++) {
+                    int ii = i-x1+1, jj = j-y1+1;
+                    p[ii][jj] = p_prev[ii][jj] - tau*g[ii][jj];
+                }
         }
+        for (i = x1; i <= x2; i++)
+            for (j = y1; j <= y2; j++) {
+                int ii = i-x1+1, jj = j-y1+1;
+                p_prev[ii][jj] = p[ii][jj] - p_prev[ii][jj];
+            }
+        double my_err = dot(x1, x2, y1, y2, p_prev, p_prev);
+        double err;
+        MPI_Allreduce(&my_err, &err, 1, MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
+        for (i = x1; i <= x2; i++)
+            for (j = y1; j <= y2; j++) {
+                int ii = i-x1+1, jj = j-y1+1;
+                p_prev[ii][jj] = p[ii][jj];
+            }
+        return sqrt(err);
     }
 
     void Print()
@@ -356,6 +403,7 @@ int main(int argc, char **argv)
     double err = 0;
     do {
         err = me.Step();
+        //printf("%d %f\n", rank, err);
     } while (err >= eps);
 
     MPI_Finalize();
