@@ -17,7 +17,7 @@ const double B2 = 2;
 const double q = 1.5;
 
 // Eps = 10^-4
-const double eps = 0.0001;
+const double eps = 10e-4;
 
 int N1, N2;
 
@@ -96,6 +96,7 @@ class Node
     double **p_prev;
     double **r;
     double **g;
+    double **l;
 
     int step;
 
@@ -105,7 +106,10 @@ class Node
                 (!i || !j || (i == N1) || (j == N2)));
     }
 
-    double h1(int i) { return (xs[i+1-x1+1] - xs[i-x1+1]); }
+    double h1(int i)
+    {
+        return (xs[i+1-x1+1] - xs[i-x1+1]);
+    }
     double h2(int j) { return (ys[j+1-y1+1] - ys[j-y1+1]); }
     double h1_(int i) { return 0.5*(h1(i) + h1(i-1)); }
     double h2_(int j) { return 0.5*(h2(j) + h2(j-1)); }
@@ -120,14 +124,21 @@ class Node
     }
     double laplace(int i, int j, double **f)
     {
-        double fij = f[i-x1+1][j-y1+1];
-        double fim1j = f[i-1-x1+1][j-y1+1];
-        double fip1j = f[i+1-x1+1][j-y1+1];
-        double fijm1 = f[i-x1+1][j-1-y1+1];
-        double fijp1 = f[i-x1+1][j+1-y1+1];
+        if (i < 1 || j < 1 || i > N1-1 || j > N2-1 ||
+            i < x1 || i > x2 || j < y1 || j > y2) {
+            return 0;
+        }
+        int ii = i - x1 + 1;
+        int jj = j - y1 + 1;
+        double fij = f[ii][jj];
+        double fim1j = f[ii-1][jj];
+        double fip1j = f[ii+1][jj];
+        double fijm1 = f[ii][jj-1];
+        double fijp1 = f[ii][jj+1];
         double f1 = (fij - fim1j)/h1(i-1) - (fip1j - fij)/h1(i);
         double f2 = (fij - fijm1)/h2(j-1) - (fijp1 - fij)/h2(j);
         return f1/h1_(i) + f2/h2_(j);
+
     }
 
 public:
@@ -160,6 +171,7 @@ public:
         p_prev = NULL;
         r = NULL;
         g = NULL;
+        l = NULL;
     }
 
     void Init()
@@ -200,12 +212,54 @@ public:
             }
         }
 
+        int start_i, end_i, start_j, end_j;
+        start_i = x1 > 1 ? x1-1 : 1;
+        end_i = x2 < N1-1 ? x2+1 : N1-1;
+        start_j = y1 > 1 ? y1-1 : 1;
+        end_j = y2 < N2-1 ? y2+1 : N2-1;
+        for (i = start_i; i <= end_i; i++)
+            for (j = start_j; j <= end_j; j++)
+                r[i-x1+1][j-y1+1] =
+                    -laplace(i, j, p_prev) - F(xs[i-x1+1], ys[j-y1+1]);
+
         g = new double*[nx+2];
         for (i = x1-1; i <= x2+1; i++) {
             g[i-x1+1] = new double[ny+2];
             for (j = y1-1; j <= y2+1; j++) {
-                g[i-x1+1][j-y1+1] = 0;
+                g[i-x1+1][j-y1+1] = r[i-x1+1][j-y1+1];
             }
+        }
+
+        l = new double*[nx+2];
+        for (i = x1-1; i <= x2+1; i++) {
+            l[i-x1+1] = new double[ny+2];
+            for (j = y1-1; j <= y2+1; j++) {
+                l[i-x1+1][j-y1+1] = 0;
+            }
+        }
+    }
+
+    double Step()
+    {
+        step++;
+        int i, j;
+        if (step == 1) {
+            int start_i, end_i, start_j, end_j;
+            start_i = x1 > 1 ? x1-1 : 1;
+            end_i = x2 < N1-1 ? x2+1 : N1-1;
+            start_j = y1 > 1 ? y1-1 : 1;
+            end_j = y2 < N2-1 ? y2+1 : N2-1;
+            for (i = start_i; i <= end_i; i++)
+                for (j = start_j; j <= end_j; j++)
+                    l[i-x1+1][j-y1+1] = -laplace(i, j, r);
+            double tau =
+                dot(start_i, end_i, start_j, end_j, r, r)/dot(start_i, end_i, start_j, end_j, l, r);
+            for (i = x1; i <= x2; i++)
+                for (j = y1; j <= y2; j++) {
+                    int ii = i-x1+1, jj = j-y1+1;
+                    p[ii][jj] = p_prev[ii][jj] - tau*r[ii][jj];
+                }
+        } else {
         }
     }
 
@@ -256,6 +310,11 @@ public:
                 delete [] g[i];
             delete [] g;
         }
+        if (l) {
+            for (i = 0; i < nx+2; i++)
+                delete [] l[i];
+            delete [] l;
+        }
     }
 };
 
@@ -293,7 +352,11 @@ int main(int argc, char **argv)
 
     Node me(rank, rows, cols);
     me.Init();
-    me.Print();
+
+    double err = 0;
+    do {
+        err = me.Step();
+    } while (err >= eps);
 
     MPI_Finalize();
     return 0;
