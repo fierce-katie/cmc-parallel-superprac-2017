@@ -3,6 +3,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <mpi.h>
+//#include <omp.h>
 
 #define N1_DEFAULT 1000
 #define N2_DEFAULT 1000
@@ -120,6 +121,7 @@ class Node
     {
         double sum = 0;
         int ii, jj, i, j;
+        //#pragma omp parallel for reduction(+:sum)
         for (i = from_i; i <= to_i; i++) {
             ii = i - x1 + 1;
             for (j = from_j; j <= to_j; j++) {
@@ -195,12 +197,15 @@ public:
         // + 2 is for neighbours
         xs = new double [nx+2];
         ys = new double [ny+2];
+        //#pragma omp parallel for
         for (i = x1-1; i <= x2+1; i++)
             xs[i-x1+1] = x_i(i);
+        //#pragma omp parallel for
         for (j = y1-1; j <= y2+1; j++)
             ys[j-y1+1] = y_j(j);
 
         p_prev = new double*[nx+2];
+        //#pragma omp parallel for
         for (i = x1-1; i <= x2+1; i++) {
             ii = i - x1 + 1;
             p_prev[ii] = new double[ny+2];
@@ -214,6 +219,7 @@ public:
         }
 
         p = new double*[nx+2];
+        //#pragma omp parallel for
         for (i = x1-1; i <= x2+1; i++) {
             ii = i - x1 + 1;
             p[ii] = new double[ny+2];
@@ -224,6 +230,7 @@ public:
         }
 
         r = new double*[nx+2];
+        //#pragma omp parallel for
         for (i = x1-1; i <= x2+1; i++) {
             ii = i - x1 + 1;
             r[ii] = new double[ny+2];
@@ -239,6 +246,7 @@ public:
         }
 
         g = new double*[nx+2];
+        //#pragma omp parallel for
         for (i = x1-1; i <= x2+1; i++) {
             ii = i - x1 + 1;
             g[ii] = new double[ny+2];
@@ -249,6 +257,7 @@ public:
         }
 
         l = new double*[nx+2];
+        //#pragma omp parallel for
         for (i = x1-1; i <= x2+1; i++) {
             ii = i - x1 + 1;
             l[ii] = new double[ny+2];
@@ -268,6 +277,7 @@ public:
         // Iteration step
         if (step == 1) {
             double dot1 = comm_dot(x1, x2, y1, y2, r, r);
+            //#pragma omp parallel for
             for (i = x1; i <= x2; i++) {
                 ii = i-x1+1;
                 for (j = y1; j <= y2; j++) {
@@ -277,6 +287,7 @@ public:
             }
             double dot2 = comm_dot(x1, x2, y1, y2, l, r);
             tau = dot1/dot2;
+            //#pragma omp parallel for
             for (i = x1; i <= x2; i++) {
                 ii = i-x1+1;
                 for (j = y1; j <= y2; j++) {
@@ -285,6 +296,7 @@ public:
                 }
             }
         } else {
+            //#pragma omp parallel for
             for (i = x1; i <= x2; i++) {
                 ii = i-x1+1;
                 for (j = y1; j <= y2; j++) {
@@ -293,6 +305,7 @@ public:
                 }
             }
             double dot1 = comm_dot(x1, x2, y1, y2, l, g);
+            //#pragma omp parallel for
             for (i = x1; i <= x2; i++) {
                 ii = i-x1+1;
                 for (j = y1; j <= y2; j++) {
@@ -302,6 +315,7 @@ public:
             }
             double dot2 = comm_dot(x1, x2, y1, y2, l, g);
             double alpha = dot1/dot2;
+            //#pragma omp parallel for
             for (i = x1; i <= x2; i++) {
                 ii = i-x1+1;
                 for (j = y1; j <= y2; j++) {
@@ -310,6 +324,7 @@ public:
                 }
             }
             dot1 = comm_dot(x1, x2, y1, y2, r, g);
+            //#pragma omp parallel for
             for (i = x1; i <= x2; i++) {
                 ii = i-x1+1;
                 for (j = y1; j <= y2; j++) {
@@ -319,6 +334,7 @@ public:
             }
             dot2 = comm_dot(x1, x2, y1, y2, l, g);
             tau = dot1/dot2;
+            //#pragma omp parallel for
             for (i = x1; i <= x2; i++) {
                 ii = i-x1+1;
                 for (j = y1; j <= y2; j++) {
@@ -339,6 +355,7 @@ public:
         double err = comm_dot(x1, x2, y1, y2, p_prev, p_prev);
 
         // Save p to p_prev
+        //#pragma omp parallel for
         for (i = x1; i <= x2; i++) {
             ii = i-x1+1;
             for (j = y1; j <= y2; j++) {
