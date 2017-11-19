@@ -17,7 +17,7 @@ const double B2 = 2;
 const double q = 1.5;
 
 // Eps = 10^-4
-const double eps = 10e-4;
+const double eps = 0.0001;
 
 int N1, N2;
 
@@ -301,13 +301,13 @@ public:
             }
         double my_err = dot(x1, x2, y1, y2, p_prev, p_prev);
         double err;
-        MPI_Allreduce(&my_err, &err, 1, MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
+        MPI_Allreduce(&my_err, &err, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
         for (i = x1; i <= x2; i++)
             for (j = y1; j <= y2; j++) {
                 int ii = i-x1+1, jj = j-y1+1;
                 p_prev[ii][jj] = p[ii][jj];
             }
-        return sqrt(err);
+        return err;
     }
 
     void Print()
@@ -399,12 +399,22 @@ int main(int argc, char **argv)
 
     Node me(rank, rows, cols);
     me.Init();
+    //me.Print();
 
     double err = 0;
+    int step = 0;
+    double t1, t2;
+    MPI_Barrier(MPI_COMM_WORLD);
+    t1 = MPI_Wtime();
     do {
+        step++;
         err = me.Step();
-        //printf("%d %f\n", rank, err);
+        printf("%d: %d %f\n", rank, step, err);
     } while (err >= eps);
+    MPI_Barrier(MPI_COMM_WORLD);
+    t2 = MPI_Wtime();
+    if (!rank)
+        printf("Time = %f\n", t2 - t1);
 
     MPI_Finalize();
     return 0;
