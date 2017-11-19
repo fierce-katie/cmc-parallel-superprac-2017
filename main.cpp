@@ -272,7 +272,7 @@ public:
                     r[ii][jj] = 0;
                 else
                     r[ii][jj] =
-                        -laplace(i, j, p_prev) - F(xs[ii], ys[jj]);
+                        laplace(i, j, p_prev) - F(xs[ii], ys[jj]);
             }
         }
 
@@ -316,7 +316,7 @@ public:
                 ii = i-x1+1;
                 for (j = y1; j <= y2; j++) {
                     jj = j-y1+1;
-                    l[ii][jj] = -laplace(i, j, r);
+                    l[ii][jj] = laplace(i, j, r);
                 }
             }
             double dot2 = comm_dot(x1, x2, y1, y2, l, r);
@@ -335,7 +335,7 @@ public:
                 ii = i-x1+1;
                 for (j = y1; j <= y2; j++) {
                     jj = j-y1+1;
-                    l[ii][jj] = -laplace(i, j, r);
+                    l[ii][jj] = laplace(i, j, r);
                 }
             }
             double dot1 = comm_dot(x1, x2, y1, y2, l, g);
@@ -344,7 +344,7 @@ public:
                 ii = i-x1+1;
                 for (j = y1; j <= y2; j++) {
                     jj = j-y1+1;
-                    l[ii][jj] = -laplace(i, j, g);
+                    l[ii][jj] = laplace(i, j, g);
                 }
             }
             double dot2 = comm_dot(x1, x2, y1, y2, l, g);
@@ -363,7 +363,7 @@ public:
                 ii = i-x1+1;
                 for (j = y1; j <= y2; j++) {
                     jj = j-y1+1;
-                    l[ii][jj] = -laplace(i, j, g);
+                    l[ii][jj] = laplace(i, j, g);
                 }
             }
             dot2 = comm_dot(x1, x2, y1, y2, l, g);
