@@ -99,6 +99,9 @@ class Node
     double **g;
     double **l;
 
+    double *row_buf;
+    double *col_buf;
+
     int step;
 
     bool border_point(int i, int j)
@@ -155,10 +158,36 @@ class Node
         double f1 = (fij - fim1j)/h1(i-1) - (fip1j - fij)/h1(i);
         double f2 = (fij - fijm1)/h2(j-1) - (fijp1 - fij)/h2(j);
         return f1/h1_(i) + f2/h2_(j);
+    }
 
+    void row_from_buf(int j) {
+        //#pragma omp parallel for
+        for (int i = x1; i <= x2; i++)
+            p_prev[i - x1 + 1][j - y1 + 1] = row_buf[i - x1 + 1];
+    }
+
+    void row_to_buf(int j) {
+        //#pragma omp parallel for
+        for (int i = x1; i <= x2; i++)
+            row_buf[i - x1 + 1] = p_prev[i - x1 + 1][j - y1 + 1];
+    }
+
+    void col_from_buf(int i) {
+        //#pragma omp parallel for
+        for (int j = y1; j <= y2; j++)
+            p_prev[i - x1 + 1][j - y1 + 1] = col_buf[j - y1 + 1];
+    }
+
+    void col_to_buf(int i) {
+        //#pragma omp parallel for
+        for (int j = y1; j <= y2; j++)
+            col_buf[j - y1 + 1] = p_prev[i - x1 + 1][j - y1 + 1];
     }
 
 public:
+
+    int GetStep() { return step; }
+
     Node(int rn, int rows, int cols)
     {
         rank = rn;
@@ -189,6 +218,8 @@ public:
         r = NULL;
         g = NULL;
         l = NULL;
+        row_buf = NULL;
+        col_buf = NULL;
     }
 
     void Init()
@@ -266,6 +297,9 @@ public:
                 l[ii][jj] = 0;
             }
         }
+
+        row_buf = new double[nx+2];
+        col_buf = new double[ny+2];
     }
 
     double Step()
@@ -367,6 +401,52 @@ public:
         return sqrt(err);
     }
 
+    void Exchange()
+    {
+        MPI_Status status;
+
+        // Get row y1-1 from up
+        if (up != -1) {
+            MPI_Recv(row_buf, nx+2, MPI_DOUBLE, up, 0, MPI_COMM_WORLD, &status);
+            row_from_buf(y1-1);
+        }
+        // Get column x1-1 from left
+        if (left != -1) {
+            MPI_Recv(col_buf, ny+2, MPI_DOUBLE, left, 0, MPI_COMM_WORLD, &status);
+            col_from_buf(x1-1);
+        }
+        // Send row y2 to down
+        if (down != -1) {
+            row_to_buf(y2);
+            MPI_Send(row_buf, nx+2, MPI_DOUBLE, down, 0, MPI_COMM_WORLD);
+        }
+        // Send column x2 to right
+        if (right != -1) {
+            col_to_buf(x2);
+            MPI_Send(col_buf, ny+2, MPI_DOUBLE, right, 0, MPI_COMM_WORLD);
+        }
+        // Send row x1 to up
+        if (up != -1) {
+            row_to_buf(x1);
+            MPI_Send(row_buf, nx+2, MPI_DOUBLE, up, 0, MPI_COMM_WORLD);
+        }
+        // Send column x1 to left
+        if (left != -1) {
+            col_to_buf(x1);
+            MPI_Send(col_buf, ny+2, MPI_DOUBLE, left, 0, MPI_COMM_WORLD);
+        }
+        // Get row y2+1 from down
+        if (down != -1) {
+            MPI_Recv(row_buf, nx+2, MPI_DOUBLE, down, 0, MPI_COMM_WORLD, &status);
+            row_from_buf(y2+1);
+        }
+        // Get column x2+1 from right
+        if (right != -1) {
+            MPI_Recv(col_buf, ny+2, MPI_DOUBLE, right, 0, MPI_COMM_WORLD, &status);
+            col_from_buf(x2+1);
+        }
+    }
+
     void Print()
     {
         const char* format
@@ -455,18 +535,17 @@ int main(int argc, char **argv)
         printf("ROWS %d COLS %d\n", rows, cols);
 
     Node me(rank, rows, cols);
-    me.Init();
+    me.Init(); // step 0
     //me.Print();
 
     double err = 0;
-    int step = 0;
     double t1, t2;
     MPI_Barrier(MPI_COMM_WORLD);
     t1 = MPI_Wtime();
     do {
-        step++;
         err = me.Step();
-        printf("%d: %d %f\n", rank, step, err);
+        printf("%d: %d %f\n", rank, me.GetStep(), err);
+        me.Exchange();
     } while (err >= eps);
     MPI_Barrier(MPI_COMM_WORLD);
     t2 = MPI_Wtime();
