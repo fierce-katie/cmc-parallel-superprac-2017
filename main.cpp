@@ -473,6 +473,10 @@ public:
             delete [] xs;
         if (ys)
             delete [] ys;
+        if (row_buf)
+            delete [] row_buf;
+        if (col_buf)
+            delete [] col_buf;
         int i;
         if (p) {
             for (i = 0; i < nx+2; i++)
