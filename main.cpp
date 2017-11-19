@@ -102,32 +102,47 @@ class Node
 
     bool border_point(int i, int j)
     {
-        return ((i >= 0) && (j >= 0) && (i <= N1) && (j <= N2) &&
-                (!i || !j || (i == N1) || (j == N2)));
+        return (i == 0 || j == 0 || i == N1 || j == N2) && !fake_point(i, j);
     }
 
-    double h1(int i)
+    bool fake_point(int i, int j)
     {
-        return (xs[i+1-x1+1] - xs[i-x1+1]);
+        return (i < 0 || j < 0 || i > N1 || j > N2);
     }
+
+    double h1(int i) { return (xs[i+1-x1+1] - xs[i-x1+1]); }
     double h2(int j) { return (ys[j+1-y1+1] - ys[j-y1+1]); }
     double h1_(int i) { return 0.5*(h1(i) + h1(i-1)); }
     double h2_(int j) { return 0.5*(h2(j) + h2(j-1)); }
+
     double dot(int from_i, int to_i, int from_j, int to_j,
                double **u, double **v)
     {
         double sum = 0;
-        for (int i = from_i; i <= to_i; i++)
-            for (int j = from_j; j <= to_j; j++)
-                sum += h1_(i)*h2_(j)*u[i-x1+1][j-y1+1]*v[i-x1+1][j-y1+1];
+        int ii, jj, i, j;
+        for (i = from_i; i <= to_i; i++) {
+            ii = i - x1 + 1;
+            for (j = from_j; j <= to_j; j++) {
+                jj = j - y1 + 1;
+                sum += h1_(i)*h2_(j)*u[ii][jj]*v[ii][jj];
+            }
+        }
         return sum;
     }
+
+    double comm_dot(int from_i, int to_i, int from_j, int to_j,
+               double **u, double **v)
+    {
+        double my_dot = dot(from_i, to_i, from_j, to_j, u, v);
+        double sum;
+        MPI_Allreduce(&my_dot, &sum, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+        return sum;
+    }
+
     double laplace(int i, int j, double **f)
     {
-        if (i < 1 || j < 1 || i > N1-1 || j > N2-1 ||
-            i < x1 || i > x2 || j < y1 || j > y2) {
+        if (border_point(i, j) || fake_point(i, j))
             return 0;
-        }
         int ii = i - x1 + 1;
         int jj = j - y1 + 1;
         double fij = f[ii][jj];
@@ -176,7 +191,7 @@ public:
 
     void Init()
     {
-        int i, j;
+        int i, j, ii, jj;
         // + 2 is for neighbours
         xs = new double [nx+2];
         ys = new double [ny+2];
@@ -187,54 +202,59 @@ public:
 
         p_prev = new double*[nx+2];
         for (i = x1-1; i <= x2+1; i++) {
-            p_prev[i-x1+1] = new double[ny+2];
+            ii = i - x1 + 1;
+            p_prev[ii] = new double[ny+2];
             for (j = y1-1; j <= y2+1; j++) {
+                jj = j - y1 + 1;
                 if (border_point(i, j))
-                    p_prev[i-x1+1][j-y1+1] = phi(xs[i-x1+1], ys[j-y1+1]);
+                    p_prev[ii][jj] = phi(xs[ii], ys[jj]);
                 else
-                    p_prev[i-x1+1][j-y1+1] = 0;
+                    p_prev[ii][jj] = 0;
             }
         }
 
         p = new double*[nx+2];
         for (i = x1-1; i <= x2+1; i++) {
-            p[i-x1+1] = new double[ny+2];
+            ii = i - x1 + 1;
+            p[ii] = new double[ny+2];
             for (j = y1-1; j <= y2+1; j++) {
-                p[i-x1+1][j-y1+1] = 0;
+                jj = j - y1 + 1;
+                p[ii][jj] = 0;
             }
         }
 
         r = new double*[nx+2];
         for (i = x1-1; i <= x2+1; i++) {
-            r[i-x1+1] = new double[ny+2];
+            ii = i - x1 + 1;
+            r[ii] = new double[ny+2];
             for (j = y1-1; j <= y2+1; j++) {
-                r[i-x1+1][j-y1+1] = 0;
+                jj = j - y1 + 1;
+                if (border_point(i, j) || fake_point(i, j) ||
+                    i == x1-1 || i == x2+1 || j == y1-1 || i == y2+1) // bcause of laplace
+                    r[ii][jj] = 0;
+                else
+                    r[ii][jj] =
+                        -laplace(i, j, p_prev) - F(xs[ii], ys[jj]);
             }
         }
 
-        int start_i, end_i, start_j, end_j;
-        start_i = x1 > 1 ? x1-1 : 1;
-        end_i = x2 < N1-1 ? x2+1 : N1-1;
-        start_j = y1 > 1 ? y1-1 : 1;
-        end_j = y2 < N2-1 ? y2+1 : N2-1;
-        for (i = start_i; i <= end_i; i++)
-            for (j = start_j; j <= end_j; j++)
-                r[i-x1+1][j-y1+1] =
-                    -laplace(i, j, p_prev) - F(xs[i-x1+1], ys[j-y1+1]);
-
         g = new double*[nx+2];
         for (i = x1-1; i <= x2+1; i++) {
-            g[i-x1+1] = new double[ny+2];
+            ii = i - x1 + 1;
+            g[ii] = new double[ny+2];
             for (j = y1-1; j <= y2+1; j++) {
-                g[i-x1+1][j-y1+1] = r[i-x1+1][j-y1+1];
+                jj = j - y1 + 1;
+                g[ii][jj] = r[ii][jj];
             }
         }
 
         l = new double*[nx+2];
         for (i = x1-1; i <= x2+1; i++) {
-            l[i-x1+1] = new double[ny+2];
+            ii = i - x1 + 1;
+            l[ii] = new double[ny+2];
             for (j = y1-1; j <= y2+1; j++) {
-                l[i-x1+1][j-y1+1] = 0;
+                jj = j - y1 + 1;
+                l[ii][jj] = 0;
             }
         }
     }
@@ -242,72 +262,44 @@ public:
     double Step()
     {
         step++;
-        int i, j;
+        int i, j, ii, jj;
+        double tmp, tau;
         if (step == 1) {
-            int start_i, end_i, start_j, end_j;
-            start_i = x1 > 1 ? x1-1 : 1;
-            end_i = x2 < N1-1 ? x2+1 : N1-1;
-            start_j = y1 > 1 ? y1-1 : 1;
-            end_j = y2 < N2-1 ? y2+1 : N2-1;
-            for (i = start_i; i <= end_i; i++)
-                for (j = start_j; j <= end_j; j++)
-                    l[i-x1+1][j-y1+1] = -laplace(i, j, r);
-            double tau =
-                dot(start_i, end_i, start_j, end_j, r, r)/dot(start_i, end_i, start_j, end_j, l, r);
-            for (i = x1; i <= x2; i++)
+            double dot1 = comm_dot(x1, x2, y1, y2, r, r);
+            for (i = x1; i <= x2; i++) {
+                ii = i-x1+1;
                 for (j = y1; j <= y2; j++) {
-                    int ii = i-x1+1, jj = j-y1+1;
+                    jj = j-y1+1;
+                    l[ii][jj] = -laplace(i, j, r);
+                }
+            }
+            double dot2 = comm_dot(x1, x2, y1, y2, l, r);
+            tau = dot1/dot2;
+            for (i = x1; i <= x2; i++) {
+                ii = i-x1+1;
+                for (j = y1; j <= y2; j++) {
+                    jj = j-y1+1;
                     p[ii][jj] = p_prev[ii][jj] - tau*r[ii][jj];
                 }
+            }
         } else {
-            int start_i, end_i, start_j, end_j;
-            start_i = x1 > 1 ? x1-1 : 1;
-            end_i = x2 < N1-1 ? x2+1 : N1-1;
-            start_j = y1 > 1 ? y1-1 : 1;
-            end_j = y2 < N2-1 ? y2+1 : N2-1;
-            for (i = start_i; i <= end_i; i++)
-                for (j = start_j; j <= end_j; j++)
-                    l[i-x1+1][j-y1+1] = -laplace(i, j, r);
-            double tmp1 =
-                dot(start_i, end_i, start_j, end_j, l, g);
-            for (i = start_i; i <= end_i; i++)
-                for (j = start_j; j <= end_j; j++)
-                    l[i-x1+1][j-y1+1] = -laplace(i, j, g);
-            double tmp2 =
-                dot(start_i, end_i, start_j, end_j, l, g);
-            double alpha = tmp1/tmp2;
-            for (i = x1; i <= x2; i++)
-                for (j = y1; j <= y2; j++)
-                    g[i-x1+1][j-y1+1] =
-                        r[i-x1+1][j-y1+1] - alpha*g[i-x1+1][j-y1+1];
-            for (i = start_i; i <= end_i; i++)
-                for (j = start_j; j <= end_j; j++) {
-                    r[i-x1+1][j-y1+1] =
-                        -laplace(i, j, p_prev) - F(xs[i-x1+1], ys[j-y1+1]);
-                    l[i-x1+1][j-y1+1] = -laplace(i, j, g);
-                }
-            double tau =
-                dot(start_i, end_i, start_j, end_j, r, g)/dot(start_i, end_i, start_j, end_j, l, g);
-            for (i = x1; i <= x2; i++)
-                for (j = y1; j <= y2; j++) {
-                    int ii = i-x1+1, jj = j-y1+1;
-                    p[ii][jj] = p_prev[ii][jj] - tau*g[ii][jj];
-                }
         }
-        for (i = x1; i <= x2; i++)
+        for (i = x1; i <= x2; i++) {
+            ii = i-x1+1;
             for (j = y1; j <= y2; j++) {
-                int ii = i-x1+1, jj = j-y1+1;
+                jj = j-y1+1;
                 p_prev[ii][jj] = p[ii][jj] - p_prev[ii][jj];
             }
-        double my_err = dot(x1, x2, y1, y2, p_prev, p_prev);
-        double err;
-        MPI_Allreduce(&my_err, &err, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-        for (i = x1; i <= x2; i++)
+        }
+        double err = comm_dot(x1, x2, y1, y2, p_prev, p_prev);
+        for (i = x1; i <= x2; i++) {
+            ii = i-x1+1;
             for (j = y1; j <= y2; j++) {
-                int ii = i-x1+1, jj = j-y1+1;
+                jj = j-y1+1;
                 p_prev[ii][jj] = p[ii][jj];
             }
-        return err;
+        }
+        return sqrt(err);
     }
 
     void Print()
@@ -413,9 +405,13 @@ int main(int argc, char **argv)
     } while (err >= eps);
     MPI_Barrier(MPI_COMM_WORLD);
     t2 = MPI_Wtime();
+    double my_dt = t2 - t1;
+    double max_dt;
+    double min_dt;
+    MPI_Allreduce(&my_dt, &max_dt, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
+    MPI_Allreduce(&my_dt, &min_dt, 1, MPI_DOUBLE, MPI_MIN, MPI_COMM_WORLD);
     if (!rank)
-        printf("Time = %f\n", t2 - t1);
-
+        printf("Max = %f\nMin = %f", max_dt, min_dt);
     MPI_Finalize();
     return 0;
 }
