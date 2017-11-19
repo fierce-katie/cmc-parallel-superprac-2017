@@ -263,7 +263,9 @@ public:
     {
         step++;
         int i, j, ii, jj;
-        double tmp, tau;
+        double tau;
+
+        // Iteration step
         if (step == 1) {
             double dot1 = comm_dot(x1, x2, y1, y2, r, r);
             for (i = x1; i <= x2; i++) {
@@ -283,7 +285,50 @@ public:
                 }
             }
         } else {
+            for (i = x1; i <= x2; i++) {
+                ii = i-x1+1;
+                for (j = y1; j <= y2; j++) {
+                    jj = j-y1+1;
+                    l[ii][jj] = -laplace(i, j, r);
+                }
+            }
+            double dot1 = comm_dot(x1, x2, y1, y2, l, g);
+            for (i = x1; i <= x2; i++) {
+                ii = i-x1+1;
+                for (j = y1; j <= y2; j++) {
+                    jj = j-y1+1;
+                    l[ii][jj] = -laplace(i, j, g);
+                }
+            }
+            double dot2 = comm_dot(x1, x2, y1, y2, l, g);
+            double alpha = dot1/dot2;
+            for (i = x1; i <= x2; i++) {
+                ii = i-x1+1;
+                for (j = y1; j <= y2; j++) {
+                    jj = j-y1+1;
+                    g[ii][jj] = r[ii][jj] - alpha*g[ii][jj];
+                }
+            }
+            dot1 = comm_dot(x1, x2, y1, y2, r, g);
+            for (i = x1; i <= x2; i++) {
+                ii = i-x1+1;
+                for (j = y1; j <= y2; j++) {
+                    jj = j-y1+1;
+                    l[ii][jj] = -laplace(i, j, g);
+                }
+            }
+            dot2 = comm_dot(x1, x2, y1, y2, l, g);
+            tau = dot1/dot2;
+            for (i = x1; i <= x2; i++) {
+                ii = i-x1+1;
+                for (j = y1; j <= y2; j++) {
+                    jj = j-y1+1;
+                    p[ii][jj] = p_prev[ii][jj] - tau*g[ii][jj];
+                }
+            }
         }
+
+        // Calculate error
         for (i = x1; i <= x2; i++) {
             ii = i-x1+1;
             for (j = y1; j <= y2; j++) {
@@ -292,6 +337,8 @@ public:
             }
         }
         double err = comm_dot(x1, x2, y1, y2, p_prev, p_prev);
+
+        // Save p to p_prev
         for (i = x1; i <= x2; i++) {
             ii = i-x1+1;
             for (j = y1; j <= y2; j++) {
@@ -299,6 +346,7 @@ public:
                 p_prev[ii][jj] = p[ii][jj];
             }
         }
+
         return sqrt(err);
     }
 
