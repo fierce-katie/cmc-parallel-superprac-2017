@@ -201,6 +201,29 @@ public:
 
     int GetStep() { return step; }
 
+    double Dev()
+    {
+        double **dev = new double*[nx+2];
+        int i, j, ii, jj;
+        for (i = x1-1; i <= x2+1; i++) {
+            ii = i - x1 + 1;
+            dev[ii] = new double[ny+2];
+            for (j = y1-1; j <= y2+1; j++) {
+                jj = j - y1 + 1;
+                if (fake_point(i, j) ||
+                    i == x1-1 || i == x2+1 || j == y1-1 || i == y2+1)
+                    dev[ii][jj] = 0;
+                else
+                    dev[ii][jj] = p[ii][jj] - phi(xs[ii], ys[jj]);
+            }
+        }
+        double res = dot(x1, x2, y1, y2, dev, dev);
+        for (i = 0; i < nx+2; i++)
+            delete [] dev[i];
+        delete [] dev;
+        return res;
+    }
+
     Node(int rn, int rows, int cols)
     {
         rank = rn;
@@ -537,18 +560,20 @@ int main(int argc, char **argv)
     t1 = MPI_Wtime();
     do {
         err = me.Step();
-        if (!rank) printf("Err = %f\n", err);
+        //if (!rank) printf("Err = %f\n", err);
         me.Exchange();
     } while (err >= eps);
     MPI_Barrier(MPI_COMM_WORLD);
     t2 = MPI_Wtime();
+    double my_dev = me.Dev(), dev;
+    MPI_Reduce(&my_dev, &dev, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
     double my_dt = t2 - t1;
     double max_dt;
     double min_dt;
     MPI_Allreduce(&my_dt, &max_dt, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
     MPI_Allreduce(&my_dt, &min_dt, 1, MPI_DOUBLE, MPI_MIN, MPI_COMM_WORLD);
     if (!rank)
-        printf("Max = %f\nMin = %f\n Steps = %d\n", max_dt, min_dt, me.GetStep());
+        printf("Max = %f\nMin = %f\nSteps = %d\nDev = %f\n", max_dt, min_dt, me.GetStep(), sqrt(dev));
     MPI_Finalize();
     return 0;
 }
