@@ -560,7 +560,6 @@ int main(int argc, char **argv)
     t1 = MPI_Wtime();
     do {
         err = me.Step();
-        printf("%d: %d %f\n", rank, me.GetStep(), err);
         me.Exchange();
     } while (err >= eps);
     MPI_Barrier(MPI_COMM_WORLD);
@@ -571,7 +570,7 @@ int main(int argc, char **argv)
     MPI_Allreduce(&my_dt, &max_dt, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
     MPI_Allreduce(&my_dt, &min_dt, 1, MPI_DOUBLE, MPI_MIN, MPI_COMM_WORLD);
     if (!rank)
-        printf("Max = %f\nMin = %f", max_dt, min_dt);
+        printf("Max = %f\nMin = %f Steps = %d\n", max_dt, min_dt, me.GetStep());
     MPI_Finalize();
     return 0;
 }
