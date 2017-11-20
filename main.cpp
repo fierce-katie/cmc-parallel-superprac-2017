@@ -388,13 +388,25 @@ public:
         }
         double err = comm_dot(x1, x2, y1, y2, p_prev, p_prev);
 
-        // Save p to p_prev
+        //#pragma omp parallel for
+        for (i = x1; i <= x2; i++) {
+            ii = i-x1+1;
+            for (j = y1; j <= y2; j++) {
+                jj = j-y1+1;
+                l[ii][jj] = laplace(i, j, p);
+            }
+        }
+        // Save p to p_prev and update r
         //#pragma omp parallel for
         for (i = x1; i <= x2; i++) {
             ii = i-x1+1;
             for (j = y1; j <= y2; j++) {
                 jj = j-y1+1;
                 p_prev[ii][jj] = p[ii][jj];
+                if (border_point(i,j) || fake_point(i,j))
+                  r[ii][jj] = 0;
+                else
+                  r[ii][jj] = l[ii][jj] - F(xs[ii], ys[jj]);
             }
         }
 
