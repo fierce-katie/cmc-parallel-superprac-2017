@@ -144,7 +144,7 @@ class Node
         return sum;
     }
 
-    double laplace(int i, int j, double **f)
+    double laplace_elem(int i, int j, double **f)
     {
         if (border_point(i, j) || fake_point(i, j))
             return 0;
@@ -158,6 +158,19 @@ class Node
         double f1 = (fij - fim1j)/h1(i-1) - (fip1j - fij)/h1(i);
         double f2 = (fij - fijm1)/h2(j-1) - (fijp1 - fij)/h2(j);
         return f1/h1_(i) + f2/h2_(j);
+    }
+
+    void laplace(int from_i, int to_i, int from_j, int to_j, double **f)
+    {
+        int i, j, ii, jj;
+        //#pragma omp parallel for
+        for (i = from_i; i <= to_i; i++) {
+            ii = i-x1+1;
+            for (j = from_j; j <= to_j; j++) {
+                jj = j-y1+1;
+                l[ii][jj] = laplace_elem(i, j, f);
+            }
+        }
     }
 
     void row_from_buf(int j) {
@@ -268,11 +281,11 @@ public:
             for (j = y1-1; j <= y2+1; j++) {
                 jj = j - y1 + 1;
                 if (border_point(i, j) || fake_point(i, j) ||
-                    i == x1-1 || i == x2+1 || j == y1-1 || i == y2+1) // bcause of laplace
+                    i == x1-1 || i == x2+1 || j == y1-1 || i == y2+1) // because of laplace
                     r[ii][jj] = 0;
                 else
                     r[ii][jj] =
-                        laplace(i, j, p_prev) - F(xs[ii], ys[jj]);
+                        laplace_elem(i, j, p_prev) - F(xs[ii], ys[jj]);
             }
         }
 
@@ -311,14 +324,7 @@ public:
         // Iteration step
         if (step == 1) {
             double dot1 = comm_dot(x1, x2, y1, y2, r, r);
-            //#pragma omp parallel for
-            for (i = x1; i <= x2; i++) {
-                ii = i-x1+1;
-                for (j = y1; j <= y2; j++) {
-                    jj = j-y1+1;
-                    l[ii][jj] = laplace(i, j, r);
-                }
-            }
+            laplace(x1, x2, y1, y2, r);
             double dot2 = comm_dot(x1, x2, y1, y2, l, r);
             tau = dot1/dot2;
             //#pragma omp parallel for
@@ -330,23 +336,9 @@ public:
                 }
             }
         } else {
-            //#pragma omp parallel for
-            for (i = x1; i <= x2; i++) {
-                ii = i-x1+1;
-                for (j = y1; j <= y2; j++) {
-                    jj = j-y1+1;
-                    l[ii][jj] = laplace(i, j, r);
-                }
-            }
+            laplace(x1, x2, y1, y2, r);
             double dot1 = comm_dot(x1, x2, y1, y2, l, g);
-            //#pragma omp parallel for
-            for (i = x1; i <= x2; i++) {
-                ii = i-x1+1;
-                for (j = y1; j <= y2; j++) {
-                    jj = j-y1+1;
-                    l[ii][jj] = laplace(i, j, g);
-                }
-            }
+            laplace(x1, x2, y1, y2, g);
             double dot2 = comm_dot(x1, x2, y1, y2, l, g);
             double alpha = dot1/dot2;
             //#pragma omp parallel for
@@ -358,14 +350,7 @@ public:
                 }
             }
             dot1 = comm_dot(x1, x2, y1, y2, r, g);
-            //#pragma omp parallel for
-            for (i = x1; i <= x2; i++) {
-                ii = i-x1+1;
-                for (j = y1; j <= y2; j++) {
-                    jj = j-y1+1;
-                    l[ii][jj] = laplace(i, j, g);
-                }
-            }
+            laplace(x1, x2, y1, y2, g);
             dot2 = comm_dot(x1, x2, y1, y2, l, g);
             tau = dot1/dot2;
             //#pragma omp parallel for
@@ -388,25 +373,17 @@ public:
         }
         double err = comm_dot(x1, x2, y1, y2, p_prev, p_prev);
 
-        //#pragma omp parallel for
-        for (i = x1; i <= x2; i++) {
-            ii = i-x1+1;
-            for (j = y1; j <= y2; j++) {
-                jj = j-y1+1;
-                l[ii][jj] = laplace(i, j, p);
-            }
-        }
         // Save p to p_prev and update r
         //#pragma omp parallel for
         for (i = x1; i <= x2; i++) {
             ii = i-x1+1;
             for (j = y1; j <= y2; j++) {
                 jj = j-y1+1;
-                p_prev[ii][jj] = p[ii][jj];
                 if (border_point(i,j) || fake_point(i,j))
                   r[ii][jj] = 0;
                 else
-                  r[ii][jj] = l[ii][jj] - F(xs[ii], ys[jj]);
+                  r[ii][jj] = laplace_elem(i, j, p) - F(xs[ii], ys[jj]);
+                p_prev[ii][jj] = p[ii][jj];
             }
         }
 
@@ -560,6 +537,7 @@ int main(int argc, char **argv)
     t1 = MPI_Wtime();
     do {
         err = me.Step();
+        if (!rank) printf("Err = %f\n", err);
         me.Exchange();
     } while (err >= eps);
     MPI_Barrier(MPI_COMM_WORLD);
@@ -570,7 +548,7 @@ int main(int argc, char **argv)
     MPI_Allreduce(&my_dt, &max_dt, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
     MPI_Allreduce(&my_dt, &min_dt, 1, MPI_DOUBLE, MPI_MIN, MPI_COMM_WORLD);
     if (!rank)
-        printf("Max = %f\nMin = %f Steps = %d\n", max_dt, min_dt, me.GetStep());
+        printf("Max = %f\nMin = %f\n Steps = %d\n", max_dt, min_dt, me.GetStep());
     MPI_Finalize();
     return 0;
 }
