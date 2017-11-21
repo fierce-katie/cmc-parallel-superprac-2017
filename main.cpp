@@ -22,31 +22,31 @@ const double eps = 0.0001;
 
 int N1, N2;
 
-double F(double x, double y)
+inline double F(double x, double y)
 {
     double xx = x*x, yy = y*y;
     return 2*(xx + yy)*(1 - 2*xx*yy)*exp(1 - xx*yy);
 }
 
-double phi(double x, double y)
+inline double phi(double x, double y)
 {
     double xx = x*x, yy = y*y;
     return exp(1 - xx*yy);
 }
 
-double f_node(double t)
+inline double f_node(double t)
 {
     return (pow(1 + t, q) - 1)/(pow(2.0, q) - 1);
 }
 
-double x_i(int i)
+inline double x_i(int i)
 {
     if (i < 0 || i > N1) return -1;
     double f = f_node((double)i/N1);
     return A2*f + A1*(1 - f);
 }
 
-double y_j(int j)
+inline double y_j(int j)
 {
     if (j < 0 || j > N2) return -1;
     double f = f_node((double)j/N2);
@@ -104,31 +104,31 @@ class Node
 
     int step;
 
-    bool border_point(int i, int j)
+    inline bool border_point(int i, int j)
     {
         return (i == 0 || j == 0 || i == N1 || j == N2) && !fake_point(i, j);
     }
 
-    bool fake_point(int i, int j)
+    inline bool fake_point(int i, int j)
     {
         return (i < 0 || j < 0 || i > N1 || j > N2);
     }
 
-    double h1(int i) { return (xs[i+1-x1+1] - xs[i-x1+1]); }
-    double h2(int j) { return (ys[j+1-y1+1] - ys[j-y1+1]); }
-    double h1_(int i) { return 0.5*(h1(i) + h1(i-1)); }
-    double h2_(int j) { return 0.5*(h2(j) + h2(j-1)); }
+    inline double h1(int i) { return (xs[i+1-x1+1] - xs[i-x1+1]); }
+    inline double h2(int j) { return (ys[j+1-y1+1] - ys[j-y1+1]); }
+    inline double h1_(int i) { return 0.5*(h1(i) + h1(i-1)); }
+    inline double h2_(int j) { return 0.5*(h2(j) + h2(j-1)); }
 
     double dot(int from_i, int to_i, int from_j, int to_j,
                double **u, double **v)
     {
         double sum = 0;
-        int ii, jj, i, j;
+        int i, j;
         //#pragma omp parallel for reduction(+:sum)
         for (i = from_i; i <= to_i; i++) {
-            ii = i - x1 + 1;
+            int ii = i - x1 + 1;
             for (j = from_j; j <= to_j; j++) {
-                jj = j - y1 + 1;
+                int jj = j - y1 + 1;
                 sum += h1_(i)*h2_(j)*u[ii][jj]*v[ii][jj];
             }
         }
@@ -144,7 +144,7 @@ class Node
         return sum;
     }
 
-    double laplace_elem(int i, int j, double **f)
+    inline double laplace_elem(int i, int j, double **f)
     {
         if (border_point(i, j) || fake_point(i, j))
             return 0;
@@ -163,7 +163,7 @@ class Node
     void laplace(int from_i, int to_i, int from_j, int to_j, double **f)
     {
         int i, j, ii, jj;
-        //#pragma omp parallel for
+        //#pragma omp parallel for private(ii, jj)
         for (i = from_i; i <= to_i; i++) {
             ii = i-x1+1;
             for (j = from_j; j <= to_j; j++) {
@@ -272,7 +272,7 @@ public:
             ys[j-y1+1] = y_j(j);
 
         p_prev = new double*[nx+2];
-        //#pragma omp parallel for
+        //#pragma omp parallel for private(ii, jj)
         for (i = x1-1; i <= x2+1; i++) {
             ii = i - x1 + 1;
             p_prev[ii] = new double[ny+2];
@@ -286,7 +286,7 @@ public:
         }
 
         p = new double*[nx+2];
-        //#pragma omp parallel for
+        //#pragma omp parallel for private(ii, jj)
         for (i = x1-1; i <= x2+1; i++) {
             ii = i - x1 + 1;
             p[ii] = new double[ny+2];
@@ -297,7 +297,7 @@ public:
         }
 
         r = new double*[nx+2];
-        //#pragma omp parallel for
+        //#pragma omp parallel for private(ii, jj)
         for (i = x1-1; i <= x2+1; i++) {
             ii = i - x1 + 1;
             r[ii] = new double[ny+2];
@@ -313,7 +313,7 @@ public:
         }
 
         g = new double*[nx+2];
-        //#pragma omp parallel for
+        //#pragma omp parallel for private(ii, jj)
         for (i = x1-1; i <= x2+1; i++) {
             ii = i - x1 + 1;
             g[ii] = new double[ny+2];
@@ -324,7 +324,7 @@ public:
         }
 
         l = new double*[nx+2];
-        //#pragma omp parallel for
+        //#pragma omp parallel for private(ii, jj)
         for (i = x1-1; i <= x2+1; i++) {
             ii = i - x1 + 1;
             l[ii] = new double[ny+2];
@@ -350,7 +350,7 @@ public:
             laplace(x1, x2, y1, y2, r);
             double dot2 = comm_dot(x1, x2, y1, y2, l, r);
             tau = dot1/dot2;
-            //#pragma omp parallel for
+            //#pragma omp parallel for private(ii, jj)
             for (i = x1; i <= x2; i++) {
                 ii = i-x1+1;
                 for (j = y1; j <= y2; j++) {
@@ -364,7 +364,7 @@ public:
             laplace(x1, x2, y1, y2, g);
             double dot2 = comm_dot(x1, x2, y1, y2, l, g);
             double alpha = dot1/dot2;
-            //#pragma omp parallel for
+            //#pragma omp parallel for private(ii, jj)
             for (i = x1; i <= x2; i++) {
                 ii = i-x1+1;
                 for (j = y1; j <= y2; j++) {
@@ -376,7 +376,7 @@ public:
             laplace(x1, x2, y1, y2, g);
             dot2 = comm_dot(x1, x2, y1, y2, l, g);
             tau = dot1/dot2;
-            //#pragma omp parallel for
+            //#pragma omp parallel for private(ii, jj)
             for (i = x1; i <= x2; i++) {
                 ii = i-x1+1;
                 for (j = y1; j <= y2; j++) {
@@ -397,7 +397,7 @@ public:
         double err = comm_dot(x1, x2, y1, y2, p_prev, p_prev);
 
         // Save p to p_prev and update r
-        //#pragma omp parallel for
+        //#pragma omp parallel for private(ii, jj)
         for (i = x1; i <= x2; i++) {
             ii = i-x1+1;
             for (j = y1; j <= y2; j++) {
