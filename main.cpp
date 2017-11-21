@@ -569,11 +569,9 @@ int main(int argc, char **argv)
     MPI_Reduce(&my_dev, &dev, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
     double my_dt = t2 - t1;
     double max_dt;
-    double min_dt;
-    MPI_Allreduce(&my_dt, &max_dt, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
-    MPI_Allreduce(&my_dt, &min_dt, 1, MPI_DOUBLE, MPI_MIN, MPI_COMM_WORLD);
+    MPI_Reduce(&my_dt, &max_dt, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
     if (!rank)
-        printf("Max = %f\nMin = %f\nSteps = %d\nDev = %f\n", max_dt, min_dt, me.GetStep(), sqrt(dev));
+        printf("Max time = %f\nSteps = %d\nDev = %f\n", max_dt, me.GetStep(), sqrt(dev));
     MPI_Finalize();
     return 0;
 }
