@@ -25,13 +25,13 @@ int N1, N2;
 double F(double x, double y)
 {
     double xx = x*x, yy = y*y;
-    return 2*(xx + yy)*(1 - 2*xx*yy)*exp(1 - 2*xx*yy);
+    return 2*(xx + yy)*(1 - 2*xx*yy)*exp(1 - xx*yy);
 }
 
 double phi(double x, double y)
 {
     double xx = x*x, yy = y*y;
-    return exp(1 - 2*xx*yy);
+    return exp(1 - xx*yy);
 }
 
 double f_node(double t)
