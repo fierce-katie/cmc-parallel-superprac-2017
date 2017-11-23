@@ -551,14 +551,14 @@ int main(int argc, char **argv)
     if (!rank)
         printf("ROWS %d COLS %d\n", rows, cols);
 
+    double t1, t2;
+    MPI_Barrier(MPI_COMM_WORLD);
+    t1 = MPI_Wtime();
     Node me(rank, rows, cols);
     me.Init(); // step 0
     //me.Print();
 
     double err = 0;
-    double t1, t2;
-    MPI_Barrier(MPI_COMM_WORLD);
-    t1 = MPI_Wtime();
     do {
         err = me.Step();
         //if (!rank) printf("Err = %f\n", err);
