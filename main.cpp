@@ -129,7 +129,8 @@ class Node
             int ii = i - x1 + 1;
             for (j = from_j; j <= to_j; j++) {
                 int jj = j - y1 + 1;
-                sum += h1_(i)*h2_(j)*u[ii][jj]*v[ii][jj];
+                if (!border_point(i, j) && !fake_point(i, j))
+                    sum += h1_(i)*h2_(j)*u[ii][jj]*v[ii][jj];
             }
         }
         return sum;
