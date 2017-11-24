@@ -537,17 +537,13 @@ int main(int argc, char **argv)
 
     int rows, cols;
     distribute_procs(procs, rows, cols);
-    if (!rank)
-        printf("ROWS %d COLS %d\n", rows, cols);
-
-    double t1, t2;
-    MPI_Barrier(MPI_COMM_WORLD);
-    t1 = MPI_Wtime();
     Node me(rank, rows, cols);
     me.Init(); // step 0
 
-
     double err;
+    double t1, t2;
+    MPI_Barrier(MPI_COMM_WORLD);
+    t1 = MPI_Wtime();
     do {
         err = me.Step();
     } while (err >= eps);
