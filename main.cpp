@@ -174,28 +174,28 @@ class Node
         }
     }
 
-    void row_from_buf(int j) {
+    void row_from_buf(int j, double **m) {
         //#pragma omp parallel for
         for (int i = x1; i <= x2; i++)
-            p_prev[i - x1 + 1][j - y1 + 1] = row_buf[i - x1 + 1];
+            m[i - x1 + 1][j - y1 + 1] = row_buf[i - x1 + 1];
     }
 
-    void row_to_buf(int j) {
+    void row_to_buf(int j, double **m) {
         //#pragma omp parallel for
         for (int i = x1; i <= x2; i++)
-            row_buf[i - x1 + 1] = p_prev[i - x1 + 1][j - y1 + 1];
+            row_buf[i - x1 + 1] = m[i - x1 + 1][j - y1 + 1];
     }
 
-    void col_from_buf(int i) {
+    void col_from_buf(int i, double **m) {
         //#pragma omp parallel for
         for (int j = y1; j <= y2; j++)
-            p_prev[i - x1 + 1][j - y1 + 1] = col_buf[j - y1 + 1];
+            m[i - x1 + 1][j - y1 + 1] = col_buf[j - y1 + 1];
     }
 
-    void col_to_buf(int i) {
+    void col_to_buf(int i, double **m) {
         //#pragma omp parallel for
         for (int j = y1; j <= y2; j++)
-            col_buf[j - y1 + 1] = p_prev[i - x1 + 1][j - y1 + 1];
+            col_buf[j - y1 + 1] = m[i - x1 + 1][j - y1 + 1];
     }
 
 public:
@@ -204,25 +204,19 @@ public:
 
     double Dev()
     {
-        double **dev = new double*[nx+2];
         int i, j, ii, jj;
         for (i = x1-1; i <= x2+1; i++) {
             ii = i - x1 + 1;
-            dev[ii] = new double[ny+2];
             for (j = y1-1; j <= y2+1; j++) {
                 jj = j - y1 + 1;
                 if (fake_point(i, j) ||
                     i == x1-1 || i == x2+1 || j == y1-1 || i == y2+1)
-                    dev[ii][jj] = 0;
+                    p[ii][jj] = 0;
                 else
-                    dev[ii][jj] = p[ii][jj] - phi(xs[ii], ys[jj]);
+                    p[ii][jj] -= phi(xs[ii], ys[jj]);
             }
         }
-        double res = dot(x1, x2, y1, y2, dev, dev);
-        for (i = 0; i < nx+2; i++)
-            delete [] dev[i];
-        delete [] dev;
-        return res;
+        return dot(x1, x2, y1, y2, p, p);
     }
 
     Node(int rn, int rows, int cols)
@@ -348,6 +342,7 @@ public:
         // Iteration step
         if (step == 1) {
             double dot1 = comm_dot(x1, x2, y1, y2, r, r);
+            Exchange(r);
             laplace(x1, x2, y1, y2, r);
             double dot2 = comm_dot(x1, x2, y1, y2, l, r);
             tau = dot1/dot2;
@@ -360,8 +355,10 @@ public:
                 }
             }
         } else {
+            Exchange(r);
             laplace(x1, x2, y1, y2, r);
             double dot1 = comm_dot(x1, x2, y1, y2, l, g);
+            Exchange(g);
             laplace(x1, x2, y1, y2, g);
             double dot2 = comm_dot(x1, x2, y1, y2, l, g);
             double alpha = dot1/dot2;
@@ -374,6 +371,7 @@ public:
                 }
             }
             dot1 = comm_dot(x1, x2, y1, y2, r, g);
+            Exchange(g);
             laplace(x1, x2, y1, y2, g);
             dot2 = comm_dot(x1, x2, y1, y2, l, g);
             tau = dot1/dot2;
@@ -395,9 +393,20 @@ public:
                 p_prev[ii][jj] = p[ii][jj] - p_prev[ii][jj];
             }
         }
-        double err = comm_dot(x1, x2, y1, y2, p_prev, p_prev);
+        double err = sqrt(comm_dot(x1, x2, y1, y2, p_prev, p_prev));
 
-        // Save p to p_prev and update r
+        // Save p to p_prev
+        //#pragma omp parallel for private(ii, jj)
+        for (i = x1; i <= x2; i++) {
+            ii = i-x1+1;
+            for (j = y1; j <= y2; j++) {
+                jj = j-y1+1;
+                p_prev[ii][jj] = p[ii][jj];
+            }
+        }
+
+        Exchange(p_prev);
+
         //#pragma omp parallel for private(ii, jj)
         for (i = x1; i <= x2; i++) {
             ii = i-x1+1;
@@ -406,57 +415,56 @@ public:
                 if (border_point(i,j) || fake_point(i,j))
                   r[ii][jj] = 0;
                 else
-                  r[ii][jj] = laplace_elem(i, j, p) - F(xs[ii], ys[jj]);
-                p_prev[ii][jj] = p[ii][jj];
+                  r[ii][jj] = laplace_elem(i, j, p_prev) - F(xs[ii], ys[jj]);
             }
         }
 
-        return sqrt(err);
+        return err;
     }
 
-    void Exchange()
+    void Exchange(double **m)
     {
         MPI_Status status;
 
         // Get row y1-1 from up
         if (up != -1) {
             MPI_Recv(row_buf, nx+2, MPI_DOUBLE, up, 0, MPI_COMM_WORLD, &status);
-            row_from_buf(y1-1);
+            row_from_buf(y1-1, m);
         }
         // Get column x1-1 from left
         if (left != -1) {
             MPI_Recv(col_buf, ny+2, MPI_DOUBLE, left, 0, MPI_COMM_WORLD, &status);
-            col_from_buf(x1-1);
+            col_from_buf(x1-1, m);
         }
         // Send row y2 to down
         if (down != -1) {
-            row_to_buf(y2);
+            row_to_buf(y2, m);
             MPI_Send(row_buf, nx+2, MPI_DOUBLE, down, 0, MPI_COMM_WORLD);
         }
         // Send column x2 to right
         if (right != -1) {
-            col_to_buf(x2);
+            col_to_buf(x2, m);
             MPI_Send(col_buf, ny+2, MPI_DOUBLE, right, 0, MPI_COMM_WORLD);
         }
         // Send row x1 to up
         if (up != -1) {
-            row_to_buf(x1);
+            row_to_buf(x1, m);
             MPI_Send(row_buf, nx+2, MPI_DOUBLE, up, 0, MPI_COMM_WORLD);
         }
         // Send column x1 to left
         if (left != -1) {
-            col_to_buf(x1);
+            col_to_buf(x1, m);
             MPI_Send(col_buf, ny+2, MPI_DOUBLE, left, 0, MPI_COMM_WORLD);
         }
         // Get row y2+1 from down
         if (down != -1) {
             MPI_Recv(row_buf, nx+2, MPI_DOUBLE, down, 0, MPI_COMM_WORLD, &status);
-            row_from_buf(y2+1);
+            row_from_buf(y2+1, m);
         }
         // Get column x2+1 from right
         if (right != -1) {
             MPI_Recv(col_buf, ny+2, MPI_DOUBLE, right, 0, MPI_COMM_WORLD, &status);
-            col_from_buf(x2+1);
+            col_from_buf(x2+1, m);
         }
     }
 
@@ -558,21 +566,21 @@ int main(int argc, char **argv)
     me.Init(); // step 0
     //me.Print();
 
-    double err = 0;
+
+    double err;
     do {
         err = me.Step();
         //if (!rank) printf("Err = %f\n", err);
-        me.Exchange();
     } while (err >= eps);
     MPI_Barrier(MPI_COMM_WORLD);
     t2 = MPI_Wtime();
-    double my_dev = me.Dev(), dev;
-    MPI_Reduce(&my_dev, &dev, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
     double my_dt = t2 - t1;
     double max_dt;
     MPI_Reduce(&my_dt, &max_dt, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+    double my_dev = me.Dev(), dev;
+    MPI_Reduce(&my_dev, &dev, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
     if (!rank)
-        printf("Max time = %f\nSteps = %d\nDev = %f\n", max_dt, me.GetStep(), sqrt(dev));
+        printf("Max time = %f\nSteps = %d\nDev = %f\n", max_dt, me.GetStep(), dev);
     MPI_Finalize();
     return 0;
 }
