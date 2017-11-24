@@ -3,7 +3,6 @@
 #include <math.h>
 #include <stdio.h>
 #include <mpi.h>
-//#include <omp.h>
 
 #define N1_DEFAULT 1000
 #define N2_DEFAULT 1000
@@ -124,7 +123,6 @@ class Node
     {
         double sum = 0;
         int i, j;
-        //#pragma omp parallel for reduction(+:sum)
         for (i = from_i; i <= to_i; i++) {
             int ii = i - x1 + 1;
             for (j = from_j; j <= to_j; j++) {
@@ -164,7 +162,6 @@ class Node
     void laplace(int from_i, int to_i, int from_j, int to_j, double **f)
     {
         int i, j, ii, jj;
-        //#pragma omp parallel for private(ii, jj)
         for (i = from_i; i <= to_i; i++) {
             ii = i-x1+1;
             for (j = from_j; j <= to_j; j++) {
@@ -175,25 +172,21 @@ class Node
     }
 
     void row_from_buf(int j, double **m) {
-        //#pragma omp parallel for
         for (int i = x1; i <= x2; i++)
             m[i - x1 + 1][j - y1 + 1] = row_buf[i - x1 + 1];
     }
 
     void row_to_buf(int j, double **m) {
-        //#pragma omp parallel for
         for (int i = x1; i <= x2; i++)
             row_buf[i - x1 + 1] = m[i - x1 + 1][j - y1 + 1];
     }
 
     void col_from_buf(int i, double **m) {
-        //#pragma omp parallel for
         for (int j = y1; j <= y2; j++)
             m[i - x1 + 1][j - y1 + 1] = col_buf[j - y1 + 1];
     }
 
     void col_to_buf(int i, double **m) {
-        //#pragma omp parallel for
         for (int j = y1; j <= y2; j++)
             col_buf[j - y1 + 1] = m[i - x1 + 1][j - y1 + 1];
     }
@@ -259,15 +252,12 @@ public:
         // + 2 is for neighbours
         xs = new double [nx+2];
         ys = new double [ny+2];
-        //#pragma omp parallel for
         for (i = x1-1; i <= x2+1; i++)
             xs[i-x1+1] = x_i(i);
-        //#pragma omp parallel for
         for (j = y1-1; j <= y2+1; j++)
             ys[j-y1+1] = y_j(j);
 
         p_prev = new double*[nx+2];
-        //#pragma omp parallel for private(ii, jj)
         for (i = x1-1; i <= x2+1; i++) {
             ii = i - x1 + 1;
             p_prev[ii] = new double[ny+2];
@@ -281,7 +271,6 @@ public:
         }
 
         p = new double*[nx+2];
-        //#pragma omp parallel for private(ii, jj)
         for (i = x1-1; i <= x2+1; i++) {
             ii = i - x1 + 1;
             p[ii] = new double[ny+2];
@@ -292,7 +281,6 @@ public:
         }
 
         r = new double*[nx+2];
-        //#pragma omp parallel for private(ii, jj)
         for (i = x1-1; i <= x2+1; i++) {
             ii = i - x1 + 1;
             r[ii] = new double[ny+2];
@@ -308,7 +296,6 @@ public:
         }
 
         g = new double*[nx+2];
-        //#pragma omp parallel for private(ii, jj)
         for (i = x1-1; i <= x2+1; i++) {
             ii = i - x1 + 1;
             g[ii] = new double[ny+2];
@@ -319,7 +306,6 @@ public:
         }
 
         l = new double*[nx+2];
-        //#pragma omp parallel for private(ii, jj)
         for (i = x1-1; i <= x2+1; i++) {
             ii = i - x1 + 1;
             l[ii] = new double[ny+2];
@@ -346,7 +332,6 @@ public:
             laplace(x1, x2, y1, y2, r);
             double dot2 = comm_dot(x1, x2, y1, y2, l, r);
             tau = dot1/dot2;
-            //#pragma omp parallel for private(ii, jj)
             for (i = x1; i <= x2; i++) {
                 ii = i-x1+1;
                 for (j = y1; j <= y2; j++) {
@@ -362,7 +347,6 @@ public:
             laplace(x1, x2, y1, y2, g);
             double dot2 = comm_dot(x1, x2, y1, y2, l, g);
             double alpha = dot1/dot2;
-            //#pragma omp parallel for private(ii, jj)
             for (i = x1; i <= x2; i++) {
                 ii = i-x1+1;
                 for (j = y1; j <= y2; j++) {
@@ -375,7 +359,6 @@ public:
             laplace(x1, x2, y1, y2, g);
             dot2 = comm_dot(x1, x2, y1, y2, l, g);
             tau = dot1/dot2;
-            //#pragma omp parallel for private(ii, jj)
             for (i = x1; i <= x2; i++) {
                 ii = i-x1+1;
                 for (j = y1; j <= y2; j++) {
@@ -396,7 +379,6 @@ public:
         double err = sqrt(comm_dot(x1, x2, y1, y2, p_prev, p_prev));
 
         // Save p to p_prev
-        //#pragma omp parallel for private(ii, jj)
         for (i = x1; i <= x2; i++) {
             ii = i-x1+1;
             for (j = y1; j <= y2; j++) {
@@ -407,7 +389,6 @@ public:
 
         Exchange(p_prev);
 
-        //#pragma omp parallel for private(ii, jj)
         for (i = x1; i <= x2; i++) {
             ii = i-x1+1;
             for (j = y1; j <= y2; j++) {
@@ -564,13 +545,11 @@ int main(int argc, char **argv)
     t1 = MPI_Wtime();
     Node me(rank, rows, cols);
     me.Init(); // step 0
-    //me.Print();
 
 
     double err;
     do {
         err = me.Step();
-        //if (!rank) printf("Err = %f\n", err);
     } while (err >= eps);
     MPI_Barrier(MPI_COMM_WORLD);
     t2 = MPI_Wtime();
