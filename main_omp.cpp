@@ -123,7 +123,8 @@ class Node
                double **u, double **v)
     {
         double sum = 0;
-        #pragma omp parallel for reduction(+:sum) collapse (2)
+        #pragma omp parallel
+        #pragma omp for schedule (static) reduction(+:sum)
         for (int i = from_i; i <= to_i; i++) {
             for (int j = from_j; j <= to_j; j++) {
                 int ii = i - x1 + 1;
@@ -162,9 +163,11 @@ class Node
 
     void laplace(int from_i, int to_i, int from_j, int to_j, double **f)
     {
-        #pragma omp parallel for collapse(2)
-        for (int i = from_i; i <= to_i; i++) {
-            for (int j = from_j; j <= to_j; j++) {
+        int i, j;
+        #pragma omp parallel
+        #pragma omp for schedule (static) private(j)
+        for (i = from_i; i <= to_i; i++) {
+            for (j = from_j; j <= to_j; j++) {
                 int ii = i-x1+1;
                 int jj = j-y1+1;
                 l[ii][jj] = laplace_elem(i, j, f);
@@ -265,6 +268,8 @@ public:
             ys[j-y1+1] = y_j(j);
 
         p_prev = new double*[nx+2];
+        #pragma omp parallel
+        #pragma omp for schedule (static) private(j, ii, jj)
         for (i = x1-1; i <= x2+1; i++) {
             ii = i - x1 + 1;
             p_prev[ii] = new double[ny+2];
@@ -278,6 +283,8 @@ public:
         }
 
         p = new double*[nx+2];
+        #pragma omp parallel
+        #pragma omp for schedule (static) private(j, ii, jj)
         for (i = x1-1; i <= x2+1; i++) {
             ii = i - x1 + 1;
             p[ii] = new double[ny+2];
@@ -288,6 +295,8 @@ public:
         }
 
         r = new double*[nx+2];
+        #pragma omp parallel
+        #pragma omp for schedule (static) private(j, ii, jj)
         for (i = x1-1; i <= x2+1; i++) {
             ii = i - x1 + 1;
             r[ii] = new double[ny+2];
@@ -303,6 +312,8 @@ public:
         }
 
         g = new double*[nx+2];
+        #pragma omp parallel
+        #pragma omp for schedule (static) private(j, ii, jj)
         for (i = x1-1; i <= x2+1; i++) {
             ii = i - x1 + 1;
             g[ii] = new double[ny+2];
@@ -313,6 +324,8 @@ public:
         }
 
         l = new double*[nx+2];
+        #pragma omp parallel
+        #pragma omp for schedule (static) private(j, ii, jj)
         for (i = x1-1; i <= x2+1; i++) {
             ii = i - x1 + 1;
             l[ii] = new double[ny+2];
@@ -339,7 +352,8 @@ public:
             laplace(x1, x2, y1, y2, r);
             double dot2 = comm_dot(x1, x2, y1, y2, l, r);
             tau = dot1/dot2;
-            #pragma omp parallel for collapse (2)
+            #pragma omp parallel
+            #pragma omp for schedule (static) private(j)
             for (i = x1; i <= x2; i++) {
                 for (j = y1; j <= y2; j++) {
                     int ii = i-x1+1;
@@ -355,7 +369,8 @@ public:
             laplace(x1, x2, y1, y2, g);
             double dot2 = comm_dot(x1, x2, y1, y2, l, g);
             double alpha = dot1/dot2;
-            #pragma omp parallel for collapse (2)
+            #pragma omp parallel
+            #pragma omp for schedule (static) private(j)
             for (i = x1; i <= x2; i++) {
                 for (j = y1; j <= y2; j++) {
                     int ii = i-x1+1;
@@ -368,7 +383,8 @@ public:
             laplace(x1, x2, y1, y2, g);
             dot2 = comm_dot(x1, x2, y1, y2, l, g);
             tau = dot1/dot2;
-            #pragma omp parallel for collapse (2)
+            #pragma omp parallel
+            #pragma omp for schedule (static) private(j)
             for (i = x1; i <= x2; i++) {
                 for (j = y1; j <= y2; j++) {
                     int ii = i-x1+1;
@@ -389,7 +405,8 @@ public:
         double err = sqrt(comm_dot(x1, x2, y1, y2, p_prev, p_prev));
 
         // Save p to p_prev
-        #pragma omp parallel for collapse (2)
+        #pragma omp parallel
+        #pragma omp for schedule (static) private(j)
         for (i = x1; i <= x2; i++) {
             for (j = y1; j <= y2; j++) {
                 int ii = i-x1+1;
@@ -400,7 +417,8 @@ public:
 
         Exchange(p_prev);
 
-        #pragma omp parallel for collapse (2)
+        #pragma omp parallel
+        #pragma omp for schedule (static) private(j)
         for (i = x1; i <= x2; i++) {
             for (j = y1; j <= y2; j++) {
                 int ii = i-x1+1;
