@@ -446,9 +446,9 @@ public:
             col_to_buf(x2, m);
             MPI_Send(col_buf, ny+2, MPI_DOUBLE, right, 0, MPI_COMM_WORLD);
         }
-        // Send row x1 to up
+        // Send row y1 to up
         if (up != -1) {
-            row_to_buf(x1, m);
+            row_to_buf(y1, m);
             MPI_Send(row_buf, nx+2, MPI_DOUBLE, up, 0, MPI_COMM_WORLD);
         }
         // Send column x1 to left
