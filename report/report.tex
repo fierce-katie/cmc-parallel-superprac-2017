@@ -293,42 +293,51 @@ $\left \lfloor \frac{N_1}{procs} \right \rfloor$ точек по оси $Ox$.
         \end{verbatim}
     \item Программа с MPI на суперкомпьютере <<Ломоносов>>:
         \begin{verbatim}
-        TODO
+        module add openmpi intel
+        mpicxx -O3 main.cpp -o _scratch/main
         \end{verbatim}
 \end{itemize}
 
-Запуск осуществлялся следующим образом:
+Запуск (добавение задачи в очередь) осуществлялся следующим образом:
 \begin{itemize}
     \item Программа с MPI на суперкомпьютере IBM Blue Gene/P:
         \begin{verbatim}
-        mpisubmit.bg -n PROCS -m smp main -- N1 N2
+        mpisubmit.bg -w T -n PROCS -m smp main -- N1 N2
         \end{verbatim}
     \item Гибридная программа MPI/OpenMP на суперкомпьютере IBM Blue Gene/P:
         \begin{verbatim}
-        mpisubmit.bg -n PROCS -m smp -env OMP_NUM_THREADS=3 main_omp -- N1 N2
+        mpisubmit.bg -w T -n PROCS -m smp -env OMP_NUM_THREADS=3 main_omp -- N1 N2
         \end{verbatim}
     \item Программа с MPI на суперкомпьютере <<Ломоносов>>:
         \begin{verbatim}
-        TODO
+        sbatch -p test -n PROCS --time=T ompi ./main N1 N2
         \end{verbatim}
 \end{itemize}
 
 \newpage
 \section{Результаты расчётов}
+
+В таблицах \ref{tab_mpi}, \ref{tab_openmp} и \ref{tab_lom} представлены результаты
+запуска программ. Ускорение считалось по формуле $S_n=\frac{T_1}{T_n}$, где
+$T_i$~--- время работы программы на $i$ процессорах.
+
+Во всех случаях время работы на 1-м процессоре на сетке $2000\times2000$ превосходит
+лимит времени на суперкомпьютерах, поэтому ускорение считалось относительно
+времени работы на 2-х процессорах: $S_n=\frac{T_2}{T_n}$.
+
 \begin{table}[h]
 \centering
 \begin{tabular}{|l|l|l|l|}\hline
 Число процессоров $N_p$ & Число точек сетки $N_1 \times N_2$ & Время решения $T$, сек. & Ускорение $S$ \\ \hline
 1                       & $1000 \times 1000$                 & 2291.87                 &               \\
-2                       & $1000 \times 1000$                 & 1129.8                  & 2.03          \\
+%2                       & $1000 \times 1000$                 & 1129.8                  & 2.03          \\
 128                     & $1000 \times 1000$                 & 21.53                   & 106.45        \\
 256                     & $1000 \times 1000$                 & 13.05                   & 175.59        \\
 512                     & $1000 \times 1000$                 & 10.3                    & 222.57        \\ \hline
-1                       & $2000 \times 2000$                 & ???                     &               \\
-2                       & $2000 \times 2000$                 & ???                     &               \\
-128                     & $2000 \times 2000$                 & ???                     &               \\
-256                     & $2000 \times 2000$                 & ???                     &               \\
-512                     & $2000 \times 2000$                 & ???                     &               \\ \hline
+2                       & $2000 \times 2000$                 & 5321.23                 &               \\
+128                     & $2000 \times 2000$                 & 157.08                  & 33.88         \\
+256                     & $2000 \times 2000$                 & 82.13                   & 64.79         \\
+512                     & $2000 \times 2000$                 & 50.96                   & 104.43        \\ \hline
 \end{tabular}
     \caption{Результаты работы программы (MPI) на IBM Blue Gene/P.}
 \label{tab_mpi}
@@ -338,43 +347,67 @@ $\left \lfloor \frac{N_1}{procs} \right \rfloor$ точек по оси $Ox$.
 \centering
 \begin{tabular}{|l|l|l|l|}\hline
 Число процессоров $N_p$ & Число точек сетки $N_1 \times N_2$ & Время решения $T$, сек. & Ускорение $S$ \\ \hline
-1                       & $1000 \times 1000$                 & ???                     & ???           \\
-128                     & $1000 \times 1000$                 & ???                     & ???           \\
-256                     & $1000 \times 1000$                 & ???                     & ???           \\
-512                     & $1000 \times 1000$                 & ???                     & ???           \\ \hline
-1                       & $2000 \times 2000$                 & ???                     & ???           \\
-128                     & $2000 \times 2000$                 & ???                     & ???           \\
-256                     & $2000 \times 2000$                 & ???                     & ???           \\
-512                     & $2000 \times 2000$                 & ???                     & ???           \\ \hline
+1                       & $1000 \times 1000$                 & 822.53                  &               \\
+%2                       & $1000 \times 1000$                 & 409.33                  & 2.01          \\
+128                     & $1000 \times 1000$                 & 18.76                   & 43.85         \\
+256                     & $1000 \times 1000$                 & 19.56                   & 42.05         \\
+512                     & $1000 \times 1000$                 & 25.91                   & 31.75         \\ \hline
+2                       & $2000 \times 2000$                 & 3348.56                 &               \\
+128                     & $2000 \times 2000$                 & 82.43                   & 40.62         \\
+256                     & $2000 \times 2000$                 & 59.74                   & 56.06         \\
+512                     & $2000 \times 2000$                 & 62.26                   & 53.78         \\ \hline
 \end{tabular}
     \caption{Результаты работы программы (MPI/OpenMP) на IBM Blue Gene/P.}
-\label{tab_mpi}
+\label{tab_openmp}
 \end{table}
 
 \begin{table}[h]
 \centering
 \begin{tabular}{|l|l|l|l|}\hline
 Число процессоров $N_p$ & Число точек сетки $N_1 \times N_2$ & Время решения $T$, сек. & Ускорение $S$ \\ \hline
-1                       & $1000 \times 1000$                 & ???                     & ???           \\
-2                       & $1000 \times 1000$                 & ???                     & ???           \\
-8                       & $1000 \times 1000$                 & ???                     & ???           \\
-16                      & $1000 \times 1000$                 & ???                     & ???           \\
-32                      & $1000 \times 1000$                 & ???                     & ???           \\
-128                     & $1000 \times 1000$                 & ???                     & ???           \\ \hline
-1                       & $2000 \times 2000$                 & ???                     & ???           \\
+1                       & $1000 \times 1000$                 & 400.79                  &               \\
+%2                       & $1000 \times 1000$                 & 207.04                  & 1.94          \\
+8                       & $1000 \times 1000$                 & 53.17                   & 7.54          \\
+16                      & $1000 \times 1000$                 & 26.19                   & 15.30         \\
+32                      & $1000 \times 1000$                 & 13.40                   & 29.92         \\
+64                      & $1000 \times 1000$                 & 7.48                    & 53.62         \\
+128                     & $1000 \times 1000$                 & 5.08                    & 78.92         \\ \hline
 2                       & $2000 \times 2000$                 & ???                     & ???           \\
 8                       & $2000 \times 2000$                 & ???                     & ???           \\
 16                      & $2000 \times 2000$                 & ???                     & ???           \\
 32                      & $2000 \times 2000$                 & ???                     & ???           \\
+64                      & $2000 \times 2000$                 & ???                     & ???           \\
 128                     & $2000 \times 2000$                 & ???                     & ???           \\ \hline
 \end{tabular}
     \caption{Результаты работы программы на СК <<Ломоносов>>.}
-\label{tab_mpi}
+\label{tab_lom}
 \end{table}
 
+\newpage
 \section{Сравнение численного решения с аналитическим}
 Функция \[u(x,y)=\expon^{1-x^2y^2}\]
 является точным решением задачи~\eqref{eq}-\eqref{BC} в прямоугольнике \(\Pi.\)
+
+Независимо от реализции и суперкомпьютера, итерационный метод проделывает
+1704 шага на сетке $1000\times1000$ и 3415 шагов на сетке $2000\times2000$. Погрешность
+вычисляется по формуле:
+\[\begin{aligned}
+    \psi=\|u(x,y)-p_{ij}\|.
+\end{aligned}\]
+
+Наблюдаемые значения погрешности при тестовых запусках варьировались
+от $0.00002$ до $0.000137$.
+
+На рис.\,\ref{fig_real} показан график точного решения $u(x,y)=\expon^{1-x^2y^2}$,
+на рис.\,\ref{fig_calc}~--- график численного решения $p$ на заданной сетке,
+на рис.\,\ref{fig_err}~--- значения погрешности в точках сетки.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=\textwidth]{fig_real}
+    \caption{Аналитическое решение $u(x,y)=\expon^{1-x^2y^2}$}
+    \label{fig_real}
+\end{figure}
 
 \end{document}
 
