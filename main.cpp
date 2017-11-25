@@ -555,7 +555,7 @@ int main(int argc, char **argv)
     double my_dev = me.Dev(), dev;
     MPI_Reduce(&my_dev, &dev, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
     if (!rank)
-        printf("Max time = %f\nSteps = %d\nDev = %f\n", max_dt, me.GetStep(), dev);
+        printf("Procs = %d\nMax time = %f\nSteps = %d\nDev = %f\n", procs, max_dt, me.GetStep(), dev);
     MPI_Finalize();
     return 0;
 }
