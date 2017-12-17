@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # For IBM BlueGene P.
-# Originalli written by Kama The Bullet.
+# Originally written by Kama The Bullet.
 
 if [ ! -d results ]; then
     mkdir results
